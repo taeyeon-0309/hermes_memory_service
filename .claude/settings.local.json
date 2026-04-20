@@ -4,7 +4,9 @@
       "Bash(npm install *)",
       "Bash(npm test *)",
       "Bash(npm run *)",
-      "Bash(./node_modules/.bin/tsc *)"
+      "Bash(./node_modules/.bin/tsc *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
