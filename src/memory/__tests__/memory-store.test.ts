@@ -106,4 +106,53 @@ describe("memory-store", () => {
     await store.loadFromDisk();
     expect(store.formatForSystemPrompt("user")).toContain("prefers ts");
   });
+
+  it("returns stable recall results with user entries ranked ahead of memory", async () => {
+    const store = new MemoryStore({ repository: new InMemoryRepo() });
+    await store.add("memory", "TypeScript coding style note");
+    await store.add("user", "The user prefers TypeScript");
+    await store.add("user", "The user prefers TypeScript");
+
+    const results = await store.search("TypeScript", { limit: 5 });
+
+    expect(results).toHaveLength(2);
+    expect(results[0]?.target).toBe("user");
+    expect(results[0]?.content).toContain("prefers TypeScript");
+    expect(results[1]?.target).toBe("memory");
+  });
+
+  it("returns empty recall results for blank or unmatched queries", async () => {
+    const store = new MemoryStore({ repository: new InMemoryRepo() });
+    await store.add("user", "prefers ts");
+
+    await expect(store.search("   ")).resolves.toEqual([]);
+    await expect(store.search("python")).resolves.toEqual([]);
+  });
+
+  it("respects recall result limits and keeps ordering stable", async () => {
+    const store = new MemoryStore({ repository: new InMemoryRepo() });
+    await store.add("user", "The user prefers TypeScript");
+    await store.add("memory", "TypeScript coding conventions");
+    await store.add("memory", "TypeScript release checklist");
+
+    const results = await store.search("TypeScript", { limit: 2 });
+
+    expect(results).toHaveLength(2);
+    expect(results[0]?.target).toBe("user");
+    expect(results[1]?.content).toContain("coding conventions");
+  });
+
+  it("respects max character budget and truncates oversized first result", async () => {
+    const store = new MemoryStore({ repository: new InMemoryRepo() });
+    await store.add("user", "TypeScript preference with a very long explanation");
+    await store.add("memory", "TypeScript coding conventions");
+
+    const truncated = await store.search("TypeScript", { maxCharacters: 12 });
+    expect(truncated).toHaveLength(1);
+    expect(truncated[0]?.content).toBe("TypeScript...");
+
+    const bounded = await store.search("TypeScript", { maxCharacters: 55 });
+    expect(bounded).toHaveLength(1);
+    expect(bounded[0]?.content).toContain("preference");
+  });
 });

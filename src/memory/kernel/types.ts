@@ -55,3 +55,9 @@ export interface MemoryToolArgs {
   content?: string;
   old_text?: string;
 }
+
+export interface MemoryPromptParts {
+  guidanceBlock: string;
+  systemMemoryBlock: string;
+  recallBlock: string;
+}

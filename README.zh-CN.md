@@ -37,6 +37,7 @@ import {
   MemoryKernel,
   MemoryStore,
   buildMemoryContextBlock,
+  buildMemoryGuidancePrompt,
 } from "./src/memory/index";
 
 const repository = new FileMemoryRepository({
@@ -54,6 +55,9 @@ await kernel.initialize("session-001", {
   platform: "cli",
   agentIdentity: "my-agent",
 });
+
+// system prompt 中的 memory 使用规则
+const memoryGuidanceBlock = buildMemoryGuidancePrompt();
 
 // system prompt 用的冻结记忆块
 const memorySystemBlock = kernel.buildSystemPrompt();
@@ -121,19 +125,36 @@ const parsed = JSON.parse(toolResult);
 推荐顺序：
 
 1. 业务系统提示词
-2. `kernel.buildSystemPrompt()`（冻结快照）
-3. 当前 query 的 recall block：`buildMemoryContextBlock(await kernel.prefetch(...))`
-4. 当前用户消息
+2. `buildMemoryGuidancePrompt()`（memory 使用规则）
+3. `kernel.buildSystemPrompt()`（冻结快照）
+4. 当前 query 的 recall block：`buildMemoryContextBlock(await kernel.prefetch(...))`
+5. 当前用户消息
+
+如果你希望使用代码级 contract，而不是自己手动拼这些片段，可以直接使用 `buildPromptParts()`：
+
+```ts
+const parts = await kernel.buildPromptParts(userMessage, sessionId);
+
+const messages = [
+  { role: "system", content: appSystemPrompt },
+  ...(parts.guidanceBlock ? [{ role: "system", content: parts.guidanceBlock }] : []),
+  ...(parts.systemMemoryBlock ? [{ role: "system", content: parts.systemMemoryBlock }] : []),
+  ...(parts.recallBlock ? [{ role: "system", content: parts.recallBlock }] : []),
+  { role: "user", content: userMessage },
+];
+```
 
 示例：
 
 ```ts
+const memoryGuidance = buildMemoryGuidancePrompt();
 const memorySystem = kernel.buildSystemPrompt();
 const recalled = await kernel.prefetch(userMessage, sessionId);
 const recallBlock = buildMemoryContextBlock(recalled);
 
 const messages = [
   { role: "system", content: appSystemPrompt },
+  ...(memoryGuidance ? [{ role: "system", content: memoryGuidance }] : []),
   ...(memorySystem ? [{ role: "system", content: memorySystem }] : []),
   ...(recallBlock ? [{ role: "system", content: recallBlock }] : []),
   { role: "user", content: userMessage },
@@ -179,7 +200,14 @@ await kernel.shutdown();
 - `loadFromDisk()` 会生成冻结快照，供 `buildSystemPrompt()` 使用。
 - `add/replace/remove` 会立即落盘。
 - 当前会话快照不会在写入后自动刷新。
-- 若需看到新内容，请新建会话重新初始化（或重建 store/kernel 后初始化）。
+- `prefetch()` 是动态的，因此同一会话后续轮次中可能已经能召回新写入的内容。
+- 若需刷新冻结快照，请新建会话重新初始化（或重建 store/kernel 后初始化）。
+
+换句话说：
+
+- `buildSystemPrompt()` 是会话级冻结的
+- `prefetch()` 是按轮动态计算的，可读取最新持久化状态
+- 同一次 memory 写入，可能会先在 recall 中可见，后在 frozen snapshot 中可见
 
 ---
 
@@ -192,6 +220,11 @@ await kernel.shutdown();
 - built-in provider 始终允许。
 - `MemoryManager` 最多接受一个 external provider。
 - provider 故障隔离（best-effort）。
+- `systemPromptBlock()` 应返回稳定、适合缓存的提示词上下文。
+- `prefetch()` 应返回针对当前 query 的动态 recall。
+- `syncTurn()` 是每轮结束后的 provider 同步入口。
+- `onMemoryWrite()` 是 built-in memory 写入后的广播 hook，主要供 external provider 响应。
+- `onPreCompress()` 可为压缩流程返回补充上下文。
 
 ---
 
@@ -200,7 +233,8 @@ await kernel.shutdown();
 - [ ] 首轮对话前调用 `initialize(sessionId, context)`
 - [ ] 将 `getToolSchemas()` 注册到模型工具配置
 - [ ] 工具调用统一经 `handleToolCall()` 调度
-- [ ] 组装 prompt 时注入 `buildSystemPrompt()` 与可选 recall block
+- [ ] 组装 prompt 时注入 `buildMemoryGuidancePrompt()`、`buildSystemPrompt()` 与可选 recall block
+- [ ] 明确你的应用在写入后是依赖动态 recall，还是必须重建 frozen snapshot
 - [ ] 每轮 assistant 输出后调用 `syncTurn()`
 - [ ] 会话结束调用 `onSessionEnd()` + `shutdown()`
 
@@ -243,6 +277,11 @@ try {
 
 1. 保持冻结到下一个会话（默认）
 2. 写入后重建 store/kernel 并 reinitialize（若必须即时可见）
+
+对于当前 built-in provider：
+
+- frozen snapshot 的可见性依赖重新初始化
+- recall 的可见性可以在同一会话的下一次 `prefetch()` 中更新
 
 ---
 

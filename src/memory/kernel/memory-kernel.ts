@@ -1,12 +1,15 @@
 import { MemoryManager } from "./memory-manager";
 import {
   ChatMessage,
+  MemoryPromptParts,
   MemoryRuntimeContext,
   ToolCallContext,
   ToolSchema,
   TurnContext,
 } from "./types";
 import { MemoryProvider } from "../provider/memory-provider";
+import { buildMemoryContextBlock } from "../context/context-builder";
+import { buildMemoryGuidancePrompt } from "../prompt/memory-guidance";
 
 interface MemoryKernelOptions {
   providers?: MemoryProvider[];
@@ -32,6 +35,15 @@ export class MemoryKernel {
 
   async prefetch(query: string, sessionId?: string): Promise<string> {
     return this.manager.prefetchAll(query, sessionId);
+  }
+
+  async buildPromptParts(userMessage: string, sessionId?: string): Promise<MemoryPromptParts> {
+    const recalled = await this.prefetch(userMessage, sessionId);
+    return {
+      guidanceBlock: buildMemoryGuidancePrompt(),
+      systemMemoryBlock: this.buildSystemPrompt(),
+      recallBlock: buildMemoryContextBlock(recalled),
+    };
   }
 
   getToolSchemas(): ToolSchema[] {

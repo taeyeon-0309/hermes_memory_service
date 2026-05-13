@@ -10,6 +10,7 @@ class StubProvider extends MemoryProvider {
   private readonly failToolCall: boolean;
   private readonly shouldFailSync: boolean;
   private readonly shouldFailSystemPrompt: boolean;
+  memoryWrites: Array<{ action: string; target: string; content: string }> = [];
 
   constructor(
     name: string,
@@ -63,6 +64,10 @@ class StubProvider extends MemoryProvider {
     if (this.shouldFailSync) {
       throw new Error("sync failed");
     }
+  }
+
+  async onMemoryWrite(action: string, target: string, content: string): Promise<void> {
+    this.memoryWrites.push({ action, target, content });
   }
 
   async onSessionEnd(_messages: ChatMessage[]): Promise<void> {}
@@ -147,6 +152,21 @@ describe("memory-manager", () => {
 
     const result = manager.buildSystemPrompt();
     expect(result).toContain("system:external");
+  });
+
+  it("broadcasts memory writes to external providers but not builtin", async () => {
+    const manager = new MemoryManager();
+    const builtin = new StubProvider("builtin", ["memory"]);
+    const external = new StubProvider("external", ["ext"]);
+    manager.addProvider(builtin);
+    manager.addProvider(external);
+
+    await manager.onMemoryWrite("add", "user", "prefers ts");
+
+    expect(builtin.memoryWrites).toEqual([]);
+    expect(external.memoryWrites).toEqual([
+      { action: "add", target: "user", content: "prefers ts" },
+    ]);
   });
 
   it("does not throw when provider schema discovery fails during registration", () => {

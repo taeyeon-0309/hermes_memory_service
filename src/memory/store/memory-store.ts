@@ -14,6 +14,18 @@ interface MemoryStoreOptions {
   userCharLimit?: number;
 }
 
+export interface MemorySearchResult {
+  target: MemoryTarget;
+  content: string;
+  score: number;
+}
+
+interface MemorySearchOptions {
+  targets?: MemoryTarget[];
+  limit?: number;
+  maxCharacters?: number;
+}
+
 export class MemoryStore {
   private readonly repository: MemoryRepository;
   private readonly memoryCharLimit: number;
@@ -47,6 +59,57 @@ export class MemoryStore {
   formatForSystemPrompt(target: MemoryTarget): string | null {
     const block = target === "memory" ? this.systemPromptSnapshot.memory : this.systemPromptSnapshot.user;
     return block.trim().length > 0 ? block : null;
+  }
+
+  async search(query: string, options: MemorySearchOptions = {}): Promise<MemorySearchResult[]> {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    const limit = options.limit ?? 5;
+    const maxCharacters = options.maxCharacters ?? Number.POSITIVE_INFINITY;
+    if (limit <= 0) {
+      return [];
+    }
+    if (maxCharacters <= 0) {
+      return [];
+    }
+
+    const targets = options.targets ?? ["user", "memory"];
+    const [memoryEntries, userEntries] = await Promise.all([
+      this.repository.loadEntries("memory"),
+      this.repository.loadEntries("user"),
+    ]);
+
+    this.memoryEntries = this.dedupe(memoryEntries.map((entry) => entry.content));
+    this.userEntries = this.dedupe(userEntries.map((entry) => entry.content));
+
+    const seen = new Set<string>();
+    const results: MemorySearchResult[] = [];
+
+    for (const target of targets) {
+      for (const entry of this.entriesFor(target)) {
+        const score = this.scoreEntry(entry, trimmed, target);
+        if (score <= 0 || seen.has(entry)) {
+          continue;
+        }
+        seen.add(entry);
+        results.push({ target, content: entry, score });
+      }
+    }
+
+    results.sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+      if (left.target !== right.target) {
+        return left.target === "user" ? -1 : 1;
+      }
+      return left.content.localeCompare(right.content);
+    });
+
+    return this.limitResults(results, limit, maxCharacters);
   }
 
   async add(target: MemoryTarget, content: string): Promise<MemoryOperationResult> {
@@ -261,5 +324,79 @@ export class MemoryStore {
       current_entries,
       usage,
     };
+  }
+
+  private scoreEntry(entry: string, query: string, target: MemoryTarget): number {
+    const normalizedEntry = entry.toLowerCase();
+    const normalizedQuery = query.toLowerCase();
+    const tokens = normalizedQuery
+      .split(/[^\p{L}\p{N}]+/u)
+      .map((token) => token.trim())
+      .filter(Boolean);
+
+    let score = 0;
+    let matched = false;
+
+    if (normalizedEntry.includes(normalizedQuery)) {
+      matched = true;
+      score += target === "user" ? 300 : 280;
+    }
+
+    for (const token of tokens) {
+      if (normalizedEntry.includes(token)) {
+        matched = true;
+        score += token.length <= 2 ? 5 : 15;
+      }
+    }
+
+    if (!matched) {
+      return 0;
+    }
+
+    score += target === "user" ? 100 : 80;
+    return score;
+  }
+
+  private limitResults(
+    results: MemorySearchResult[],
+    limit: number,
+    maxCharacters: number
+  ): MemorySearchResult[] {
+    const selected: MemorySearchResult[] = [];
+    let currentChars = 0;
+
+    for (const result of results) {
+      if (selected.length >= limit) {
+        break;
+      }
+
+      const entryCost = result.content.length + (selected.length === 0 ? 0 : 1);
+      if (selected.length > 0 && currentChars + entryCost > maxCharacters) {
+        continue;
+      }
+      if (selected.length === 0 && result.content.length > maxCharacters) {
+        selected.push({
+          ...result,
+          content: this.truncateContent(result.content, maxCharacters),
+        });
+        break;
+      }
+
+      selected.push(result);
+      currentChars += entryCost;
+    }
+
+    return selected;
+  }
+
+  private truncateContent(content: string, maxCharacters: number): string {
+    if (content.length <= maxCharacters) {
+      return content;
+    }
+    if (maxCharacters <= 1) {
+      return content.slice(0, maxCharacters);
+    }
+
+    return `${content.slice(0, maxCharacters - 1).trimEnd()}...`;
   }
 }

@@ -37,6 +37,7 @@ import {
   MemoryKernel,
   MemoryStore,
   buildMemoryContextBlock,
+  buildMemoryGuidancePrompt,
 } from "./src/memory/index";
 
 const repository = new FileMemoryRepository({
@@ -56,6 +57,7 @@ await kernel.initialize("session-001", {
 });
 
 // frozen memory snapshot for system prompt
+const memoryGuidanceBlock = buildMemoryGuidancePrompt();
 const memorySystemBlock = kernel.buildSystemPrompt();
 
 // optional recall block for current user query
@@ -121,19 +123,36 @@ Failure (example):
 Recommended order per turn:
 
 1. Core system prompt
-2. `kernel.buildSystemPrompt()` (frozen snapshot)
-3. Recall block from current query: `buildMemoryContextBlock(await kernel.prefetch(...))`
-4. Current user message
+2. `buildMemoryGuidancePrompt()` (memory usage rules)
+3. `kernel.buildSystemPrompt()` (frozen snapshot)
+4. Recall block from current query: `buildMemoryContextBlock(await kernel.prefetch(...))`
+5. Current user message
+
+If you want a code-level contract instead of manually composing these pieces yourself, use `buildPromptParts()`:
+
+```ts
+const parts = await kernel.buildPromptParts(userMessage, sessionId);
+
+const messages = [
+  { role: "system", content: appSystemPrompt },
+  ...(parts.guidanceBlock ? [{ role: "system", content: parts.guidanceBlock }] : []),
+  ...(parts.systemMemoryBlock ? [{ role: "system", content: parts.systemMemoryBlock }] : []),
+  ...(parts.recallBlock ? [{ role: "system", content: parts.recallBlock }] : []),
+  { role: "user", content: userMessage },
+];
+```
 
 Example:
 
 ```ts
+const memoryGuidance = buildMemoryGuidancePrompt();
 const memorySystem = kernel.buildSystemPrompt();
 const recalled = await kernel.prefetch(userMessage, sessionId);
 const recallBlock = buildMemoryContextBlock(recalled);
 
 const messages = [
   { role: "system", content: appSystemPrompt },
+  ...(memoryGuidance ? [{ role: "system", content: memoryGuidance }] : []),
   ...(memorySystem ? [{ role: "system", content: memorySystem }] : []),
   ...(recallBlock ? [{ role: "system", content: recallBlock }] : []),
   { role: "user", content: userMessage },
@@ -179,7 +198,14 @@ Entries are persisted as plain text blocks, joined by delimiter `\n§\n`.
 - `loadFromDisk()` creates a frozen snapshot used by `buildSystemPrompt()`.
 - `add/replace/remove` write to disk immediately.
 - The current session snapshot does **not** auto-refresh after writes.
-- Refresh snapshot by initializing a new session (or reloading store and reinitializing kernel).
+- `prefetch()` is dynamic and may surface newly written memory in later turns of the same session.
+- Refresh the frozen snapshot by initializing a new session (or reloading store and reinitializing kernel).
+
+In other words:
+
+- `buildSystemPrompt()` is session-frozen
+- `prefetch()` is turn-scoped and can observe the latest persisted state
+- A memory write can become recall-visible before it becomes snapshot-visible
 
 ---
 
@@ -192,6 +218,11 @@ Notes:
 - Built-in provider is always allowed.
 - At most one external provider is accepted by `MemoryManager`.
 - Provider failures are isolated (best-effort orchestration).
+- `systemPromptBlock()` should return stable, cache-friendly prompt context.
+- `prefetch()` should return turn-scoped dynamic recall for the current query.
+- `syncTurn()` is the post-turn hook for provider-side transcript or state updates.
+- `onMemoryWrite()` is a broadcast hook for built-in memory mutations and is intended for external providers.
+- `onPreCompress()` can return extra context for transcript compression workflows.
 
 ---
 
@@ -232,6 +263,11 @@ Because snapshots are frozen per initialized session, choose one strategy:
 
 1. Keep frozen snapshot until next session (current default)
 2. Recreate kernel/store and reinitialize after a write if your app requires immediate visibility
+
+With the current built-in provider:
+
+- snapshot visibility updates on reinitialize
+- recall visibility can update on the next `prefetch()` call in the same session
 
 ---
 
@@ -322,6 +358,7 @@ Minimal target shape:
 - [ ] Call `initialize(sessionId, context)` before first turn
 - [ ] Register `getToolSchemas()` into model tool config
 - [ ] Dispatch tool calls via `handleToolCall()`
-- [ ] Inject `buildSystemPrompt()` and optional recall block into prompt assembly
+- [ ] Inject `buildMemoryGuidancePrompt()`, `buildSystemPrompt()`, and optional recall block into prompt assembly
+- [ ] Decide whether your app treats dynamic recall as sufficient after writes, or whether it must rebuild the frozen snapshot
 - [ ] Call `syncTurn()` after each assistant response
 - [ ] Call `onSessionEnd()` + `shutdown()` on exit
