@@ -6,6 +6,12 @@ import {
   MemoryStore,
   ToolSchema,
 } from "../memory/index";
+import {
+  FileSessionRepository,
+  SessionSearchService,
+  SESSION_SEARCH_TOOL_SCHEMA,
+  executeSessionSearchTool,
+} from "../session-search/index";
 
 export interface AgentMessage {
   role: "system" | "user" | "assistant" | "tool";
@@ -49,6 +55,7 @@ export class ExampleHostAgent {
   private readonly appSystemPrompt: string;
   private readonly sessionId: string;
   private readonly runtimeContext?: MemoryRuntimeContext;
+  private readonly sessionSearch: SessionSearchService;
   private initialized = false;
 
   constructor(options: HostAgentOptions) {
@@ -61,6 +68,9 @@ export class ExampleHostAgent {
     const store = new MemoryStore({ repository });
     const provider = new BuiltinMemoryProvider({ store });
     this.kernel = new MemoryKernel({ providers: [provider] });
+    this.sessionSearch = new SessionSearchService({
+      repository: new FileSessionRepository({ baseDir: options.baseDir }),
+    });
   }
 
   async initialize(): Promise<void> {
@@ -78,7 +88,7 @@ export class ExampleHostAgent {
     });
 
     const parts = await this.kernel.buildPromptParts(userMessage, this.sessionId);
-    const tools = this.kernel.getToolSchemas();
+    const tools = [...this.kernel.getToolSchemas(), SESSION_SEARCH_TOOL_SCHEMA];
     const systemMessages: AgentMessage[] = [
       { role: "system", content: this.appSystemPrompt },
       ...(parts.guidanceBlock ? ([{ role: "system", content: parts.guidanceBlock }] as AgentMessage[]) : []),
@@ -97,17 +107,25 @@ export class ExampleHostAgent {
     if (!firstPass.toolCall) {
       const assistantMessage = firstPass.assistantMessage ?? "";
       await this.kernel.syncTurn(userMessage, assistantMessage, this.sessionId);
+      const resultMessages = [...messages, { role: "assistant", content: assistantMessage } as AgentMessage];
+      await this.sessionSearch.archiveTurn(this.sessionId, [
+        { role: "user", content: userMessage },
+        { role: "assistant", content: assistantMessage },
+      ]);
       return {
-        messages: [...messages, { role: "assistant", content: assistantMessage }],
+        messages: resultMessages,
         assistantMessage,
       };
     }
 
-    const toolResult = await this.kernel.handleToolCall(
-      firstPass.toolCall.toolName,
-      firstPass.toolCall.args,
-      { sessionId: this.sessionId }
-    );
+    const toolResult =
+      firstPass.toolCall.toolName === "session_search"
+        ? await executeSessionSearchTool(firstPass.toolCall.args, this.sessionSearch)
+        : await this.kernel.handleToolCall(
+            firstPass.toolCall.toolName,
+            firstPass.toolCall.args,
+            { sessionId: this.sessionId }
+          );
 
     const toolMessages: AgentMessage[] = [
       ...messages,
@@ -129,6 +147,10 @@ export class ExampleHostAgent {
 
     const assistantMessage = secondPass.assistantMessage ?? "";
     await this.kernel.syncTurn(userMessage, assistantMessage, this.sessionId);
+    await this.sessionSearch.archiveTurn(this.sessionId, [
+      { role: "user", content: userMessage },
+      { role: "assistant", content: assistantMessage },
+    ]);
 
     return {
       messages: [...toolMessages, { role: "assistant", content: assistantMessage }],

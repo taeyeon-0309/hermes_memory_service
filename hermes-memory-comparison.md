@@ -33,7 +33,7 @@
 | recall context fencing | 有 recall block 概念 | `buildMemoryContextBlock()` | 已对齐 | 当前实现已可用于 prompt 注入 |
 | built-in recall/query | 官方 memory 文档核心是 frozen memory，动态 recall 更多由其它层补足 | 当前实现已有 built-in deterministic recall MVP | 部分超前 / 部分偏离 | 当前实现比最小 built-in memory 更主动，但还不是 Hermes 的 `session_search` |
 | dynamic recall after writes | 文档强调 frozen snapshot；更完整 history recall 由 `session_search` 承担 | 同 session 中 recall 可见新写入内容 | 部分对齐 | 当前实现明确区分 snapshot 与 recall 两层 |
-| session search | 有 `session_search`，基于 SQLite + FTS + summarization | 未实现 | 未覆盖 | 这是当前对 Hermes 的主要差距之一 |
+| session search | 有 `session_search`，基于 SQLite + FTS + summarization | 已有 file-based `session_search` MVP，但不含 SQLite / FTS / summarization | 部分对齐 | 当前已补上 session-history retrieval 的雏形，但仍弱于 Hermes 官方实现 |
 | external memory providers | 官方支持多个 provider 生态 | 仅有 provider 抽象，无真实 external provider | 部分对齐 | 架构已留口，生态未复刻 |
 | provider orchestration | built-in + external 并存 | built-in + 最多一个 external | 部分对齐 | 方向一致，但功能规模更小 |
 | prompt assembly memory lane | frozen MEMORY / USER 注入 + tool guidance + recall layers | `buildMemoryGuidancePrompt()` + `buildSystemPrompt()` + `buildPromptParts()` | 已对齐（memory lane） | 当前实现已覆盖 memory 相关 prompt plumbing |
@@ -77,8 +77,7 @@
 
 这些能力仍然不在当前实现范围内：
 
-- `session_search`
-- conversation archive / FTS history retrieval
+- conversation archive 的 Hermes-style SQLite / FTS 版本
 - 多 external provider 生态
 - 完整 Hermes prompt assembly（SOUL / skills / context files / timestamp / platform hint）
 - 自动 memory 提炼 / 合并策略
@@ -300,29 +299,35 @@ Hermes 官方将 `session_search` 描述为：
 
 ### 对照当前仓库实现
 
-当前仓库尚未覆盖 Hermes `session_search` 的关键能力：
+当前仓库已经具备 `session_search` MVP，但尚未覆盖 Hermes 官方 `session_search` 的关键增强能力：
 
 - 没有 SQLite session store
 - 没有 FTS5 检索
-- 没有历史 transcript archive
-- 没有 session-level grouping
 - 没有 summarization-based recall
-- 没有 `session_search` tool
+- 没有更完整的 metadata / ranking pipeline
 
-当前仓库已有的 built-in recall：
+当前仓库已经实现的 `session_search` MVP 具备：
+
+- file-based transcript archive
+- session-level grouping
+- `session_search` tool
+- deterministic query matching
+- lightweight contextual summary
+
+当前仓库已有的 built-in memory recall：
 
 - 只在 `MEMORY.md` / `USER.md` 内做 deterministic recall
-- 不搜索历史会话
-- 不做会话级摘要
+- 不等价于 `session_search`
 
 所以这里的差距很明确：
 
 - 当前实现已经有 memory-layer recall
-- 但仍没有 Hermes 官方那套 session-history retrieval system
+- 也已经有 `session_search` 的 MVP 原型
+- 但仍没有 Hermes 官方那套 SQLite + FTS + summarization 的完整 session-history retrieval system
 
 更准确地说：
 
-> 当前实现复刻了 Hermes 的 curated memory 核心，但尚未复刻 Hermes 的 `session_search` 能力层；这也是当前与 Hermes Memory 全量能力相比最关键的缺口之一。
+> 当前实现已经复刻了 Hermes curated memory 核心，并补上了 `session_search` 的 MVP 雏形；现在与 Hermes 官方的主要差距，已经从“有没有 session_search”变成了“session_search 的底层与检索质量是否达到 Hermes 官方规模”。
 
 ---
 

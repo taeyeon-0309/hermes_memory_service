@@ -15,6 +15,7 @@
 - 写入前安全扫描
 - provider 抽象与 manager 编排
 - prompt assembly contract
+- `session_search` MVP（独立模块）
 
 ---
 
@@ -127,6 +128,33 @@
 - [threat-patterns.ts](</Users/minicoder/Vibe Project/Hermes-Memory/src/memory/security/threat-patterns.ts>)
 - [content-scanner.ts](</Users/minicoder/Vibe Project/Hermes-Memory/src/memory/security/content-scanner.ts>)
 
+### 2.7 Session Search MVP
+
+当前已具备：
+
+- file-based session transcript archive
+- `SessionSearchService`
+- `session_search` tool schema + executor
+- session-level search results
+- 示例宿主 Agent 接入 `session_search`
+
+当前这部分仍属于 MVP：
+
+- file-based store
+- deterministic keyword / phrase matching
+- lightweight contextual summaries
+
+尚未达到 Hermes 官方那版更完整的：
+
+- SQLite + FTS5
+- transcript slicing + model summarization
+
+核心文件：
+
+- [file-session-repository.ts](</Users/minicoder/Vibe Project/Hermes-Memory/src/session-search/file-session-repository.ts>)
+- [session-search-service.ts](</Users/minicoder/Vibe Project/Hermes-Memory/src/session-search/session-search-service.ts>)
+- [session-search-tool.ts](</Users/minicoder/Vibe Project/Hermes-Memory/src/session-search/tools/session-search-tool.ts>)
+
 ---
 
 ## 3. What The Module Can Already Do In A Host Agent
@@ -139,6 +167,7 @@
 4. 在模型调用 `memory` tool 时完成真实写入
 5. 在同 session 中让新写入内容被后续 recall 命中
 6. 在下一个 session 中让新写入内容进入新的 frozen snapshot
+7. 归档并搜索过去会话中的历史对话
 
 ---
 
@@ -148,13 +177,17 @@
 
 - embedding / vector retrieval
 - 真正语义检索
-- transcript archive / session search
 - 自动 memory 提炼
 - 多 external provider 并行支持
 - 跨进程锁
 - 绑定具体 LLM SDK 的 agent runtime
 
 这些不属于当前完成态的缺陷，而是明确未进入现阶段范围的内容。
+
+补充说明：
+
+- 当前仓库已经具备 `session_search` MVP
+- 但仍未达到 Hermes 官方那版 SQLite + FTS + summarization 的完整能力
 
 ---
 

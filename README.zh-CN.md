@@ -6,6 +6,7 @@
 
 - 长期记忆存储，支持两个目标：`memory` 与 `user`
 - 统一 memory 工具（`add | replace | remove`）
+- 会话归档与 `session_search` MVP
 - Provider 架构（`MemoryProvider`、`MemoryManager`、`MemoryKernel`）
 - 文件持久化（`FileMemoryRepository`）
 - 会话级冻结快照（system prompt snapshot）
@@ -71,7 +72,7 @@ const recallBlock = buildMemoryContextBlock(recalled);
 
 ## 2）工具注册与调度
 
-使用 `kernel.getToolSchemas()` 作为 LLM 工具定义：
+使用 `kernel.getToolSchemas()` 作为 memory 工具定义；如果你要接入 Hermes-style 的历史会话检索，还应在宿主层额外暴露 `SESSION_SEARCH_TOOL_SCHEMA`。
 
 ```ts
 const tools = kernel.getToolSchemas();
@@ -117,6 +118,11 @@ const parsed = JSON.parse(toolResult);
   "error": "old_text is required for remove"
 }
 ```
+
+对于历史会话检索，建议在宿主层额外暴露 `session_search`。当前仓库中的 `src/example-agent/host-agent.ts` 已演示如何在一个 tool loop 中同时组合：
+
+- `memory`
+- `session_search`
 
 ---
 
@@ -190,6 +196,7 @@ await kernel.shutdown();
 
 - `./data/memories/MEMORY.md`
 - `./data/memories/USER.md`
+- `./data/sessions/<sessionId>.json`（`session_search` MVP 的 transcript 归档）
 
 条目以纯文本块形式存储，分隔符为 `\n§\n`。
 
@@ -282,6 +289,19 @@ try {
 
 - frozen snapshot 的可见性依赖重新初始化
 - recall 的可见性可以在同一会话的下一次 `prefetch()` 中更新
+
+### D. Session Search MVP
+
+当前 V3 MVP 额外引入了一条独立的历史会话检索链路：
+
+- 每轮完成后可将 turn 归档到 `sessions/<sessionId>.json`
+- 通过 `session_search` tool 检索过去会话
+- 返回按 session 聚合的轻量 summary
+
+这条能力与 curated persistent memory 分工不同：
+
+- `memory` / `user` 负责小而稳定的长期事实
+- `session_search` 负责更宽范围的历史会话找回
 
 ---
 

@@ -6,6 +6,7 @@ This README explains how to embed and call the memory module in another agent ap
 
 - Long-term memory storage with two targets: `memory` and `user`
 - Unified memory tool (`add | replace | remove`)
+- Session transcript archive + `session_search` MVP
 - Provider architecture (`MemoryProvider`, `MemoryManager`, `MemoryKernel`)
 - File-based persistence (`FileMemoryRepository`)
 - Session-frozen system prompt snapshot semantics
@@ -69,7 +70,7 @@ const recallBlock = buildMemoryContextBlock(recalled);
 
 ## 2) Tool registration and dispatch
 
-Use `kernel.getToolSchemas()` as tool definitions for your LLM runtime.
+Use `kernel.getToolSchemas()` as tool definitions for your memory runtime, and add `SESSION_SEARCH_TOOL_SCHEMA` if you want Hermes-style session-history retrieval.
 
 ```ts
 const tools = kernel.getToolSchemas();
@@ -115,6 +116,13 @@ Failure (example):
   "error": "old_text is required for remove"
 }
 ```
+
+For session-history retrieval, expose `session_search` as a second tool through the host layer. The example host agent in `src/example-agent/host-agent.ts` shows how to combine:
+
+- `memory`
+- `session_search`
+
+inside one tool loop.
 
 ---
 
@@ -188,6 +196,7 @@ With `baseDir = ./data`, files are:
 
 - `./data/memories/MEMORY.md`
 - `./data/memories/USER.md`
+- `./data/sessions/<sessionId>.json` for `session_search` MVP transcripts
 
 Entries are persisted as plain text blocks, joined by delimiter `\n§\n`.
 
@@ -268,6 +277,19 @@ With the current built-in provider:
 
 - snapshot visibility updates on reinitialize
 - recall visibility can update on the next `prefetch()` call in the same session
+
+### D. Session Search MVP
+
+Current V3 MVP adds a separate session-history layer:
+
+- each completed turn can be archived to `sessions/<sessionId>.json`
+- a `session_search` tool can search prior sessions
+- results are returned at session granularity with lightweight summaries
+
+This is intentionally separate from curated persistent memory:
+
+- `memory` / `user` store small stable facts
+- `session_search` searches broader historical conversation context
 
 ---
 
