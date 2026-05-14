@@ -7,9 +7,9 @@ import {
   ToolSchema,
 } from "../memory/index";
 import {
-  FileSessionRepository,
   SessionSearchService,
   SESSION_SEARCH_TOOL_SCHEMA,
+  SQLiteSessionRepository,
   executeSessionSearchTool,
 } from "../session-search/index";
 
@@ -40,6 +40,7 @@ export interface HostAgentOptions {
   baseDir: string;
   model: HostModelAdapter;
   sessionId: string;
+  sessionTitle?: string;
   appSystemPrompt: string;
   runtimeContext?: MemoryRuntimeContext;
 }
@@ -54,6 +55,7 @@ export class ExampleHostAgent {
   private readonly model: HostModelAdapter;
   private readonly appSystemPrompt: string;
   private readonly sessionId: string;
+  private readonly sessionTitle?: string;
   private readonly runtimeContext?: MemoryRuntimeContext;
   private readonly sessionSearch: SessionSearchService;
   private initialized = false;
@@ -62,6 +64,7 @@ export class ExampleHostAgent {
     this.model = options.model;
     this.appSystemPrompt = options.appSystemPrompt;
     this.sessionId = options.sessionId;
+    this.sessionTitle = options.sessionTitle;
     this.runtimeContext = options.runtimeContext;
 
     const repository = new FileMemoryRepository({ baseDir: options.baseDir });
@@ -69,7 +72,7 @@ export class ExampleHostAgent {
     const provider = new BuiltinMemoryProvider({ store });
     this.kernel = new MemoryKernel({ providers: [provider] });
     this.sessionSearch = new SessionSearchService({
-      repository: new FileSessionRepository({ baseDir: options.baseDir }),
+      repository: new SQLiteSessionRepository({ baseDir: options.baseDir }),
     });
   }
 
@@ -111,7 +114,11 @@ export class ExampleHostAgent {
       await this.sessionSearch.archiveTurn(this.sessionId, [
         { role: "user", content: userMessage },
         { role: "assistant", content: assistantMessage },
-      ]);
+      ], {
+        source: this.runtimeContext?.platform,
+        userId: this.runtimeContext?.userId,
+        title: this.sessionTitle,
+      });
       return {
         messages: resultMessages,
         assistantMessage,
@@ -120,7 +127,10 @@ export class ExampleHostAgent {
 
     const toolResult =
       firstPass.toolCall.toolName === "session_search"
-        ? await executeSessionSearchTool(firstPass.toolCall.args, this.sessionSearch)
+        ? await executeSessionSearchTool(firstPass.toolCall.args, this.sessionSearch, {
+            preferredSource: this.runtimeContext?.platform,
+            preferredUserId: this.runtimeContext?.userId,
+          })
         : await this.kernel.handleToolCall(
             firstPass.toolCall.toolName,
             firstPass.toolCall.args,
@@ -150,7 +160,11 @@ export class ExampleHostAgent {
     await this.sessionSearch.archiveTurn(this.sessionId, [
       { role: "user", content: userMessage },
       { role: "assistant", content: assistantMessage },
-    ]);
+    ], {
+      source: this.runtimeContext?.platform,
+      userId: this.runtimeContext?.userId,
+      title: this.sessionTitle,
+    });
 
     return {
       messages: [...toolMessages, { role: "assistant", content: assistantMessage }],

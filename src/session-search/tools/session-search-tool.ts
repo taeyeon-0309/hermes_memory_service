@@ -6,7 +6,11 @@ function errorJson(message: string): string {
 
 export async function executeSessionSearchTool(
   args: Record<string, unknown>,
-  service: SessionSearchService
+  service: SessionSearchService,
+  options: {
+    preferredSource?: string;
+    preferredUserId?: string;
+  } = {}
 ): Promise<string> {
   try {
     const query = typeof args.query === "string" ? args.query.trim() : "";
@@ -19,6 +23,8 @@ export async function executeSessionSearchTool(
 
     const results = await service.search(query, {
       limit,
+      preferredSource: options.preferredSource,
+      preferredUserId: options.preferredUserId,
     });
 
     return JSON.stringify({

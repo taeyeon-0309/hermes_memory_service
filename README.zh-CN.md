@@ -7,6 +7,7 @@
 - 长期记忆存储，支持两个目标：`memory` 与 `user`
 - 统一 memory 工具（`add | replace | remove`）
 - 会话归档与 `session_search` MVP
+- SQLite / FTS 版 `session_search` 升级路径，且已落地首个 backend
 - Provider 架构（`MemoryProvider`、`MemoryManager`、`MemoryKernel`）
 - 文件持久化（`FileMemoryRepository`）
 - 会话级冻结快照（system prompt snapshot）
@@ -197,6 +198,7 @@ await kernel.shutdown();
 - `./data/memories/MEMORY.md`
 - `./data/memories/USER.md`
 - `./data/sessions/<sessionId>.json`（`session_search` MVP 的 transcript 归档）
+- `./data/sessions/state.db`（SQLite / FTS backend）
 
 条目以纯文本块形式存储，分隔符为 `\n§\n`。
 
@@ -302,6 +304,22 @@ try {
 
 - `memory` / `user` 负责小而稳定的长期事实
 - `session_search` 负责更宽范围的历史会话找回
+
+### E. SQLite / FTS Backend Upgrade
+
+当前仓库还已经落地了 `session_search` 的首个 SQLite backend：
+
+- `SQLiteSessionRepository`
+- 基于 FTS 的消息检索
+- session-level grouping
+- 轻量上下文摘录
+
+这意味着当前项目现在同时具备：
+
+1. file-based `session_search` MVP 路径
+2. SQLite / FTS backend 首版路径
+
+示例宿主 Agent 当前默认已切到 SQLite backend，而 file-based backend 仍可作为 fallback / 测试用途保留。
 
 ---
 

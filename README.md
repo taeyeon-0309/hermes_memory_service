@@ -7,6 +7,7 @@ This README explains how to embed and call the memory module in another agent ap
 - Long-term memory storage with two targets: `memory` and `user`
 - Unified memory tool (`add | replace | remove`)
 - Session transcript archive + `session_search` MVP
+- SQLite / FTS-backed `session_search` upgrade path with a first backend implementation
 - Provider architecture (`MemoryProvider`, `MemoryManager`, `MemoryKernel`)
 - File-based persistence (`FileMemoryRepository`)
 - Session-frozen system prompt snapshot semantics
@@ -197,6 +198,7 @@ With `baseDir = ./data`, files are:
 - `./data/memories/MEMORY.md`
 - `./data/memories/USER.md`
 - `./data/sessions/<sessionId>.json` for `session_search` MVP transcripts
+- `./data/sessions/state.db` for the SQLite / FTS backend
 
 Entries are persisted as plain text blocks, joined by delimiter `\n§\n`.
 
@@ -290,6 +292,22 @@ This is intentionally separate from curated persistent memory:
 
 - `memory` / `user` store small stable facts
 - `session_search` searches broader historical conversation context
+
+### E. SQLite / FTS Backend Upgrade
+
+The current repository now also includes a first SQLite-backed `session_search` backend:
+
+- `SQLiteSessionRepository`
+- FTS-based message retrieval
+- session-level grouping
+- lightweight contextual excerpts
+
+This means the project now has:
+
+1. a file-based `session_search` MVP path
+2. a first SQLite / FTS backend path
+
+The SQLite backend is now the default backend used by the example host agent, while the file-based backend remains useful as a fallback and test fixture.
 
 ---
 

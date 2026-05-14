@@ -137,21 +137,26 @@
 - `session_search` tool schema + executor
 - session-level search results
 - 示例宿主 Agent 接入 `session_search`
+- `SQLiteSessionRepository` 首版实现
+- FTS-based search backend
+- `source / user_id / title` metadata 可选支持
 
 当前这部分仍属于 MVP：
 
 - file-based store
+- SQLite backend 首版
 - deterministic keyword / phrase matching
 - lightweight contextual summaries
+- title 仅支持宿主显式传入，不做自动生成
 
 尚未达到 Hermes 官方那版更完整的：
 
-- SQLite + FTS5
 - transcript slicing + model summarization
 
 核心文件：
 
 - [file-session-repository.ts](</Users/minicoder/Vibe Project/Hermes-Memory/src/session-search/file-session-repository.ts>)
+- [sqlite-session-repository.ts](</Users/minicoder/Vibe Project/Hermes-Memory/src/session-search/sqlite-session-repository.ts>)
 - [session-search-service.ts](</Users/minicoder/Vibe Project/Hermes-Memory/src/session-search/session-search-service.ts>)
 - [session-search-tool.ts](</Users/minicoder/Vibe Project/Hermes-Memory/src/session-search/tools/session-search-tool.ts>)
 
@@ -187,7 +192,8 @@
 补充说明：
 
 - 当前仓库已经具备 `session_search` MVP
-- 但仍未达到 Hermes 官方那版 SQLite + FTS + summarization 的完整能力
+- 也已开始具备 SQLite / FTS backend 的首版能力
+- 但仍未达到 Hermes 官方那版更完整的 SQLite + FTS + summarization 版本
 
 ---
 

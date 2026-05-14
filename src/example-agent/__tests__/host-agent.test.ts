@@ -116,6 +116,7 @@ describe("example host agent", () => {
           },
         },
         sessionId: "session-archive",
+        sessionTitle: "TypeScript Session",
         appSystemPrompt: "You are a helpful agent.",
       });
 

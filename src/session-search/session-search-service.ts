@@ -1,5 +1,6 @@
 import { SessionRepository } from "./session-repository";
 import {
+  SessionArchiveMetadata,
   SessionArchiveMessage,
   SessionSearchOptions,
   SessionSearchResult,
@@ -16,7 +17,11 @@ export class SessionSearchService {
     this.repository = options.repository;
   }
 
-  async archiveTurn(sessionId: string, messages: SessionArchiveMessage[]): Promise<void> {
+  async archiveTurn(
+    sessionId: string,
+    messages: SessionArchiveMessage[],
+    metadata?: SessionArchiveMetadata
+  ): Promise<void> {
     const now = new Date().toISOString();
     await this.repository.appendEntries(
       sessionId,
@@ -24,7 +29,8 @@ export class SessionSearchService {
         timestamp: now,
         role: message.role,
         content: message.content,
-      }))
+      })),
+      metadata
     );
   }
 

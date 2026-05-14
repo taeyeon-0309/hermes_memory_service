@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
+  SessionArchiveMetadata,
   SessionSearchOptions,
   SessionSearchResult,
   SessionTranscript,
@@ -19,7 +20,11 @@ export class FileSessionRepository implements SessionRepository {
     this.sessionsDir = path.join(options.baseDir, "sessions");
   }
 
-  async appendEntries(sessionId: string, entries: SessionTranscriptEntry[]): Promise<void> {
+  async appendEntries(
+    sessionId: string,
+    entries: SessionTranscriptEntry[],
+    metadata?: SessionArchiveMetadata
+  ): Promise<void> {
     if (entries.length === 0) {
       return;
     }
@@ -30,6 +35,9 @@ export class FileSessionRepository implements SessionRepository {
     const next: SessionTranscript = {
       sessionId,
       updatedAt: entries[entries.length - 1]?.timestamp ?? new Date().toISOString(),
+      source: metadata?.source ?? transcript.source,
+      userId: metadata?.userId ?? transcript.userId,
+      title: metadata?.title ?? transcript.title,
       entries: nextEntries,
     };
 
@@ -129,6 +137,9 @@ export class FileSessionRepository implements SessionRepository {
       sessionId: transcript.sessionId,
       score: bestScore,
       updatedAt: transcript.updatedAt,
+      source: transcript.source,
+      userId: transcript.userId,
+      title: transcript.title,
       summary,
     };
   }

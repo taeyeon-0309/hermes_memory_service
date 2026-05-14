@@ -6,6 +6,12 @@ export interface SessionArchiveMessage {
   name?: string;
 }
 
+export interface SessionArchiveMetadata {
+  source?: string;
+  userId?: string;
+  title?: string;
+}
+
 export interface SessionTranscriptEntry {
   timestamp: string;
   role: SessionMessageRole;
@@ -15,6 +21,9 @@ export interface SessionTranscriptEntry {
 export interface SessionTranscript {
   sessionId: string;
   updatedAt: string;
+  source?: string;
+  userId?: string;
+  title?: string;
   entries: SessionTranscriptEntry[];
 }
 
@@ -22,12 +31,17 @@ export interface SessionSearchResult {
   sessionId: string;
   score: number;
   updatedAt: string;
+  source?: string;
+  userId?: string;
+  title?: string;
   summary: string;
 }
 
 export interface SessionSearchOptions {
   limit?: number;
   contextMessages?: number;
+  preferredSource?: string;
+  preferredUserId?: string;
 }
 
 export interface SessionSearchToolArgs {

@@ -8,6 +8,7 @@
 - `session_search` spec / checklist 已建立
 - Phase A-D 的 MVP 原型已存在
 - 当前正在对齐实现与文档
+- README / 对比文档 / 总览文档 已完成首轮同步
 
 因此，这份文档当前既是设计基线，也是当前 MVP 实现的对照基线。
 
